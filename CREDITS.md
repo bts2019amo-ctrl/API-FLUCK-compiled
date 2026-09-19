@@ -6,6 +6,10 @@
 
 **Packages / subs** · [fluckv2.org](https://fluckv2.org)
 
+**Discord** · @zexisyy_
+
+**Telegram** · @zexisyy
+
 **Repository** · [github.com/ZexisRe/API-FLUCK](https://github.com/ZexisRe/API-FLUCK)
 
 ---
