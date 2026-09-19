@@ -1,0 +1,7 @@
+.theos/
+**/.theos/
+demo/.theos/
+demo/packages/
+demo/obj/
+.DS_Store
+*.o

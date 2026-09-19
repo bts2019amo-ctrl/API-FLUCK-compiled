@@ -1,0 +1,9 @@
+Package: com.yourname.kademo
+Name: ka_demo
+Depends: firmware (>= 14.0)
+Version: 3.0.0
+Architecture: iphoneos-arm
+Description: KeyAuth SDK demo dylib
+Maintainer: Zexis
+Author: Zexis
+Section: Libraries

@@ -1,179 +1,149 @@
 # KeyAuth iOS SDK
 
-License validation and anti-tamper SDK for iOS apps. No source code—binary only.
+License validation for iOS jailbreak tweaks. **Binary only** — engine source is not in this repository.
+
+The engine lives in `lib/libKeyAuth.a` and **starts itself**. You do not add a constructor or bootstrap file. Fill in the headers, `-force_load` the archive, done.
 
 ---
 
-## Files Included
+## Buy a package / subscription
 
-| File | Purpose |
-|------|---------|
-| `libKeyAuth.a` | Static library (arm64) |
-| `KeyAuth.h` | Public API header |
-| `KeyAuthConfig.h` | Config declarations (define values in your app) |
-| `themeAPI.mm` | Optional theme provider for KeyAuth UI |
+Get a package, keys, and a dashboard at **[fluckv2.org](https://fluckv2.org)**.
+
+That site is where you create the package, copy `KA_PACKAGE_ID` / `KA_APP_ID` / version / token, and issue license keys. This GitHub repo is the iOS SDK only — it does not sell plans.
 
 ---
 
-## Requirements
+## What you get
 
-- iOS 12+
-- Xcode 12+
-- **CoreTelephony** framework
+| Path | What it is |
+|------|------------|
+| `lib/libKeyAuth.a` | Prebuilt engine (fat **arm64** + **arm64e**). Auto-runs package check, key UI, seals, offset download. |
+| `include/KAConfig.h` | **Your** package id / app id / version / token. Include from **exactly one** `.mm` with `#define KA_CONFIG_IMPL 1`. Token is never inside the `.a`. |
+| `include/KALicense.h` | Public status API: `KAIsLicensed`, `KAIsReady`, expiry, ban, `KAGetOffset`. |
+| `include/getoffset.h` | `GetOffset("name")` / `OffsetsReady()` / `OffsetLoadedCount()`. Names are whatever **your** package stored on the server. |
+| `theos/keyauth.mk` | Optional Theos include: force-load + frameworks. |
+| `demo/` | Sample Theos dylib. Copy the pattern; replace placeholders. |
+
+Do **not** expect engine `.mm` files. There are none.
 
 ---
 
-## Quick Start
+## Headers (the only API)
 
-### 1. Add files to your project
+### `KAConfig.h`
 
-- Add `libKeyAuth.a` and `KeyAuth.h` to your Xcode project
-- Add `KeyAuthConfig.h` or copy the config declarations into your code
+Macros you set **before** the import (or in a small wrapper header like the demo):
 
-### 2. Link the library
+| Macro | Required | Example |
+|-------|----------|---------|
+| `KA_PACKAGE_ID` | yes | `"your_package"` |
+| `KA_APP_ID` | yes | `"com.yourname.com"` |
+| `KA_PACKAGE_NAME` | yes | `"YourProduct"` |
+| `KA_PACKAGE_VERSION` | yes | `"1.0"` |
+| `KA_PACKAGE_TOKEN` | yes | HMAC token from **your** dashboard — per package, never share one bake |
+| `KA_DISPLAY_NAME` | no | shown in the built-in UI |
+| `KA_LICENSE_KEY` | no | leave empty; user enters / keychain saves a **valid** key |
+| `KA_USE_OFFSETS` | no | `1` download offsets, `0` skip |
+| `KA_ENABLED` | yes | **must be `1`**. `0` is tamper (crash), not a skip switch |
 
-In **Build Phases** → **Link Binary With Libraries**:
-
-- Add `libKeyAuth.a`
-- Add `CoreTelephony.framework`
-
-### 3. Force-load the library
-
-In **Other Linker Flags**, add:
-
-```
--force_load $(SRCROOT)/path/to/libKeyAuth.a
-```
-
-Replace `path/to/` with the actual path to the library in your project.
-
-### 4. Define config
-
-In any `.m` file (e.g. `AppDelegate.m` or `Draw.mm`), **before** calling KeyAuth:
+### `KALicense.h`
 
 ```objc
-#import "KeyAuthConfig.h"
-#import "KeyAuth.h"
-
-// Your package values (from Fluck dashboard)
-NSString * const KEYAUTH_APP_DISPLAY_NAME = @"Your App Name";
-
-const uint8_t KEYAUTH_ENC_VERSION[] = {0x42, 0x56, 0x41, 0x56, 0x42};  // "1.0.1"
-const NSUInteger KEYAUTH_ENC_VERSION_LEN = sizeof(KEYAUTH_ENC_VERSION);
-
-const uint8_t KEYAUTH_ENC_APP_ID[] = {0x03, 0x0F, 0x0D, 0x56, ...};  // "com.your.appid"
-const NSUInteger KEYAUTH_ENC_APP_ID_LEN = sizeof(KEYAUTH_ENC_APP_ID);
-
-const uint32_t KEYAUTH_MAX_DYLIBS = 10;  // Max extra dylibs (anti-inject)
+KASetLicenseKey(@"YOURKEY");   // persist + re-validate
+KAIsLicensed();                // package + key ok
+KAIsReady();                   // licensed, and offsets if enabled
+KACurrentKey();
+KAExpiryString();
+KARemainingSeconds();
+KAStatusText();
+KAPackageName();
+KADisplayName();
+KAGetOffset("your_name");      // 0 until ready
+KAOffsetCount();
+IsDeviceBanned();
 ```
 
-You must get the correct byte arrays for `KEYAUTH_ENC_VERSION` and `KEYAUTH_ENC_APP_ID` from your package config. Contact your provider for these values.
+Gate your menu on `KAIsLicensed()` / `KAIsReady()`, not on a local flag.
 
-### 5. Start KeyAuth
-
-Call before any KeyAuth-dependent logic:
+### `getoffset.h`
 
 ```objc
-- (void)viewDidLoad {
-    [super viewDidLoad];
-    [[KeyAuthSystem shared] start];
-    // ... rest of your code
-}
+uintptr_t v = GetOffset("your_name");  // 0 until package + key (+ offsets) succeed
+BOOL OffsetsReady(void);
+int OffsetLoadedCount(void);
 ```
+
+There is no shared `offsets.h`. Each package has its own names on the server.
 
 ---
 
-## Theme API (themeAPI.mm)
+## Integrate (Theos)
 
-`themeAPI.mm` is an optional Objective‑C category that provides theme colors to KeyAuth’s built‑in UI. If your project has no menu/theme system (e.g. no `ModMenuViewController`), include `themeAPI.mm` so KeyAuth gets valid colors and does not crash.
-
-### When to use
-
-- **Use it** when KeyAuth shows UI (login, validation) and your app does not already supply theme methods on `KeyAuthSystem`.
-- **Skip it** when your main menu (e.g. `Draw.mm` with `ModMenuViewController`) already implements the theme methods KeyAuth expects.
-
-### Add to build
-
-Include `themeAPI.mm` in your target’s compile sources (Xcode) or in `Makefile`:
-
-```
-$(TWEAK_NAME)_FILES = ... API/themeAPI.mm ...
-```
-
-### Theme keys (NSUserDefaults)
-
-| Key | Type | Values | Default |
-|-----|------|--------|---------|
-| `ModMenuDarkMode` | `BOOL` | `YES` = dark, `NO` = light | `YES` |
-| `ModMenuColorTheme` | `NSInteger` | `0` Red, `1` Blue, `2` Green, `3` Pink | `0` |
-| `ModMenuWinterTheme` | `BOOL` | `YES` = winter style | `NO` |
-| `ModMenuLiquidTheme` | `BOOL` | `YES` = liquid glass style | `NO` |
-
-### Methods provided
-
-| Method | Purpose |
-|--------|---------|
-| `isDarkMode` | Dark vs light mode |
-| `isWinterTheme` | Winter theme active |
-| `isLiquidTheme` | Liquid/glass theme active |
-| `accentColor` | Main accent (buttons, highlights) |
-| `backgroundColor` | Panel background |
-| `textColor` | Primary text |
-| `secondaryTextColor` | Secondary/muted text |
-| `pillColor` | Pill/button background |
-| `checkboxOffColor` | Unchecked checkbox |
-| `glowColor` | Glow/shadow color |
-| `borderColor` | Panel border |
-| `separatorColor` | Divider lines |
-| `pillBorderColor` | Pill border |
-
-### Enabling Winter or Liquid theme
-
-Set the keys **before** KeyAuth shows UI:
+In **exactly one** `.mm`:
 
 ```objc
-[[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"ModMenuWinterTheme"];
-[[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"ModMenuLiquidTheme"];
-[[NSUserDefaults standardUserDefaults] synchronize];
+#define KA_CONFIG_IMPL 1
+#import "KAConfig.h"
+#import "KALicense.h"
+#import "getoffset.h"
 ```
 
-- **Winter:** Ice‑blue accent, cool backgrounds.
-- **Liquid/Glass:** Semi‑transparent backgrounds and pills for a frosted look.
+Makefile:
+
+```make
+TWEAK_NAME = YourTweak
+$(TWEAK_NAME)_FILES = Tweak.mm
+include path/to/sdk/theos/keyauth.mk
+```
+
+Or without the helper:
+
+```make
+$(TWEAK_NAME)_CFLAGS  += -fobjc-arc -Ipath/to/sdk/include
+$(TWEAK_NAME)_CCFLAGS += -std=c++17 -fobjc-arc -Ipath/to/sdk/include
+$(TWEAK_NAME)_LDFLAGS += -Wl,-force_load,path/to/sdk/lib/libKeyAuth.a -lc++
+$(TWEAK_NAME)_FRAMEWORKS += UIKit Foundation Security CoreGraphics QuartzCore
+```
+
+`-force_load` is required so the constructor is not dropped.
+
+Do **not** run OLLVM / obfuscator passes on **your** dylib for this SDK. The `.a` is already processed.
+
+Works on macOS, Linux, WSL, and on-device Theos.
 
 ---
 
-## API
+## Demo
+
+```bash
+# edit demo/KAConfig.h — put YOUR token and com.yourname.com style app id
+cd demo && make
+```
+
+Placeholders in `demo/KAConfig.h`:
 
 ```objc
-[[KeyAuthSystem shared] start];                           // Initialize
-
-[obj getPackageVersion];                                 
-[obj getAppID];                                           // e.g. "com.dts.samwill"
-[obj getAppDisplayName];                                  // Display name
-[obj getKey];                                             // License key (if set)
-
-[obj validatePackageWithCompletion:^(BOOL valid, NSString *err, NSDictionary *data) {
-    if (!valid) { /* show err, exit */ }
-}];
+#define KA_PACKAGE_ID      "your_package"
+#define KA_APP_ID          "com.yourname.com"
+#define KA_PACKAGE_NAME    "YourProduct"
+#define KA_PACKAGE_VERSION "1.0"
+#define KA_PACKAGE_TOKEN   "PUT_YOUR_PACKAGE_TOKEN_HERE"
 ```
+
+On GitHub clones, use the shipped `lib/libKeyAuth.a`. Do not look for engine source.
 
 ---
 
-## Troubleshooting
+## Kill switch
 
-| Issue | Fix |
-|-------|-----|
-| Undefined symbols | Ensure `-force_load` is set for `libKeyAuth.a` |
-| Compile errors | Add `CoreTelephony` framework |
-| Validation fails | Check app ID, version, and encoded bytes match your package |
-| Injection detected | Increase `KEYAUTH_MAX_DYLIBS` if using legitimate dylibs |
-| KeyAuth UI crash / bad colors | Add `themeAPI.mm` to the build and ensure theme keys are set before KeyAuth runs |
+Package status is checked on the server. Disable the package or rotate the token and clients fail closed even if someone patches a local BOOL.
 
 ---
 
 ## MYDash
 
-**MYDash.ipa** — dashboard for devs. Create bans, manage keys, and full control over your packages.
+**MYDash.ipa** — dashboard for developers. Keys, bans, packages.
 
 | Loading | Login |
 |:-------:|:-----:|
@@ -187,6 +157,7 @@ Set the keys **before** KeyAuth shows UI:
 
 ## Contact
 
+- **Website / buy:** [fluckv2.org](https://fluckv2.org)
 - **Discord:** @zexisyy_
 - **Telegram:** @zexisyy
 
@@ -200,4 +171,4 @@ See [CREDITS.md](CREDITS.md).
 
 ## License
 
-Proprietary. Use only as permitted by the provider.
+Copyright © 2026 Zexis. All rights reserved. Proprietary. Use only as permitted by the provider.

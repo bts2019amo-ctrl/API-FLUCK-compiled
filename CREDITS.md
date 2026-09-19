@@ -2,28 +2,22 @@
 
 ## KeyAuth iOS SDK
 
-**Provider** · Fluck / API-FLUCK
+**Provider** · Zexis
+
+**Packages / subs** · [fluckv2.org](https://fluckv2.org)
 
 **Repository** · [github.com/ZexisRe/API-FLUCK](https://github.com/ZexisRe/API-FLUCK)
 
 ---
 
-### Components
+### This release
 
-- **KeyAuth System** – License validation, package checks
-- **SecureMap** – Encoded string handling
-- **fluckcheck** – Anti-inject / dylib monitoring
-- **KeychainHelper** – Secure key storage
-- **LicenseManager** – Token and key management
+- Static engine (`libKeyAuth.a`) — package check, license UI, offsets
+- Public headers only (`KAConfig.h`, `KALicense.h`, `getoffset.h`)
+- Theos demo with placeholder `com.yourname.com`
 
 ---
 
-### Thanks
+*No engine source. Binary-only SDK.*
 
-- Fluck ecosystem
-- KeyAuth integration
-- Contributors and testers
-
----
-
-*No source code. Binary-only release.*
+Copyright © 2026 Zexis. All rights reserved.
