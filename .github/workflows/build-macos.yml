@@ -25,7 +25,6 @@ jobs:
         shell: bash
         run: |
           git clone --recursive https://github.com/theos/theos.git "$THEOS"
-          "$THEOS/bin/install-toolchain"
           "$THEOS/bin/install-sdk" latest
 
       - name: Build demo package
